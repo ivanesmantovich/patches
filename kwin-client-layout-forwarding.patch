@@ -1,0 +1,66 @@
+--- a/src/keyboard_input.cpp
++++ b/src/keyboard_input.cpp
+@@ -325,6 +325,7 @@
+         }
+     }
+ 
++    m_xkb->forwardClientModifiers();
+     m_input->processSpies(&InputEventSpy::keyboardKey, &event);
+     m_input->processFilters(&InputEventFilter::keyboardKey, &event);
+ 
+@@ -332,7 +333,7 @@
+         m_filteredKeys.removeOne(key);
+     }
+ 
+-    m_xkb->forwardModifiers();
++    m_xkb->forwardClientModifiers();
+     if (auto *inputmethod = kwinApp()->inputMethod()) {
+         inputmethod->forwardModifiers(InputMethod::NoForce);
+     }
+--- a/src/xkb.cpp
++++ b/src/xkb.cpp
+@@ -864,6 +864,26 @@
+                                     m_currentLayout);
+ }
+ 
++quint32 Xkb::clientLayoutForForwarding() const
++{
++    const Qt::KeyboardModifiers shortcutModifiers = Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier;
++    if (m_modifiers.testAnyFlags(shortcutModifiers)) {
++        return 0;
++    }
++    return m_currentLayout;
++}
++
++void Xkb::forwardClientModifiers()
++{
++    if (!m_seat || !m_seat->keyboard()) {
++        return;
++    }
++    m_seat->notifyKeyboardModifiers(m_modifierState.depressed,
++                                    m_modifierState.latched,
++                                    m_modifierState.locked,
++                                    clientLayoutForForwarding());
++}
++
+ QString Xkb::layoutName(xkb_layout_index_t index) const
+ {
+     if (!m_keymap) {
+--- a/src/xkb.h
++++ b/src/xkb.h
+@@ -117,6 +117,7 @@
+      * Forwards the current modifier state to the Wayland seat
+      */
+     void forwardModifiers();
++    void forwardClientModifiers();
+ 
+     void setSeat(SeatInterface *seat);
+     QByteArray keymapContents() const;
+@@ -170,6 +171,7 @@
+     void createKeymapFile();
+     void updateModifiers();
+     void updateConsumedModifiers(uint32_t key);
++    quint32 clientLayoutForForwarding() const;
+     xkb_context *m_context;
+     xkb_keymap *m_keymap;
+     QStringList m_layoutList;
